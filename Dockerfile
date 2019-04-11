@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Minoru Osuka
+# Copyright (c) 2019 Minoru Osuka
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:18.10
+FROM golang:1.12.1-stretch
 
 ARG VERSION
 
@@ -20,26 +20,21 @@ ENV GOPATH /go
 
 COPY . ${GOPATH}/src/github.com/mosuka/blast
 
-RUN apt-get update && \
+RUN echo "deb http://ftp.us.debian.org/debian/ jessie main contrib non-free" >> /etc/apt/sources.list && \
+    echo "deb-src http://ftp.us.debian.org/debian/ jessie main contrib non-free" >> /etc/apt/sources.list && \
+    apt-get update && \
     apt-get install -y \
       git \
       golang \
       libicu-dev \
-      libleveldb-dev \
       libstemmer-dev \
-      libgflags-dev \
-      libsnappy-dev \
-      zlib1g-dev \
-      libbz2-dev \
-      liblz4-dev \
-      libzstd-dev \
-      librocksdb-dev \
+      libleveldb-dev \
       gcc-4.8 \
       g++-4.8 \
       build-essential && \
     apt-get clean && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 80 && \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 80 && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 80 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-6 80 && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 90 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90 && \
     go get -u -v github.com/blevesearch/cld2 && \
@@ -49,38 +44,30 @@ RUN apt-get update && \
     ./compile_libs.sh && \
     cp *.so /usr/local/lib && \
     cd ${GOPATH}/src/github.com/mosuka/blast && \
-    GOOS=linux \
+    make \
+      GOOS=linux \
       GOARCH=amd64 \
       CGO_ENABLED=1 \
-      CGO_CFLAGS="-I/usr/include/rocksdb" \
-      CGO_LDFLAGS="-L/usr/lib -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" \
-      BUILD_TAGS="full" \
+      BUILD_TAGS="kagome icu libstemmer cld2 cznicb leveldb badger" \
       VERSION="${VERSION}" \
-      make build
+      build
 
-FROM ubuntu:18.10
+FROM debian:stretch-slim
 
 MAINTAINER Minoru Osuka "minoru.osuka@gmail.com"
 
 RUN apt-get update && \
     apt-get install -y \
       libicu-dev \
-      libleveldb-dev \
       libstemmer-dev \
-      libgflags-dev \
-      libsnappy-dev \
-      zlib1g-dev \
-      libbz2-dev \
-      liblz4-dev \
-      libzstd-dev \
-      librocksdb-dev && \
+      libleveldb-dev && \
     apt-get clean
 
 COPY --from=0 /go/src/github.com/blevesearch/cld2/cld2/internal/*.so /usr/local/lib/
 COPY --from=0 /go/src/github.com/mosuka/blast/bin/* /usr/bin/
 COPY --from=0 /go/src/github.com/mosuka/blast/docker-entrypoint.sh /usr/bin/
 
-EXPOSE 10000 10001 10002
+EXPOSE 5050 6060 8080
 
 ENTRYPOINT [ "/usr/bin/docker-entrypoint.sh" ]
-CMD        [ "blastd", "--help" ]
+CMD        [ "blast-indexer", "--help" ]
